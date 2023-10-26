@@ -1,10 +1,8 @@
 from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base, main, comon_parameters
 from pymodaq.utils.data import DataFromPlugins
-#from pymodaq.utils.daq_utils import DataFromPlugins
 from easydict import EasyDict as edict
-#from collections import OrderedDict
-#from ...hardware.keithley2000.keithley2000_VISADriver import Keithley2000VISADriver as Keithley2000
-import ...hardware.keithley2000.keithley2000_VISADriver as Keithley2000
+from ...hardware.keithley2000.keithley2000_VISADriver import Keithley2000VISADriver as Keithley2000
+
 import numpy as np
 
 
@@ -32,12 +30,16 @@ class DAQ_0DViewer_Keithley2000_V2(DAQ_Viewer_base):
         device = ''
         raise e
 
-
+    # List of Keithley 2000 available baud rate
     available_baud_rate_list = [300,600,1200,2400,4800,9600,19200]
 
     params = comon_parameters+[
-        {'title': 'VISA:', 'name': 'VISA_ressources', 'type': 'list', 'limits': devices},
+        {'title': 'VISA Resource', 'name': 'visa_resources', 'type': 'group', 'children': [
+        {'title': 'Devices:', 'name': 'visa_device', 'type': 'list', 'limits': devices},
+        {'title': 'Baud Rate:', 'name': 'visa_baud_rate', 'type': 'list', 'limits': available_baud_rate_list, 'value':available_baud_rate_list[6]},]},
+
         {'title': 'Keithley2000 Parameters',  'name': 'K2000Params', 'type': 'group', 'children': [
+            {'title': 'Identication:', 'name': 'id', 'type': 'text', 'value': "Identification instrument string"},
             {'title': 'Mode', 'name': 'mode', 'type': 'list', 'limits': ['VDC', 'VAC', 'R2W', 'R4W'], 'value': 'VDC'}
 
         ]}
@@ -76,6 +78,8 @@ class DAQ_0DViewer_Keithley2000_V2(DAQ_Viewer_base):
        # pdb.set_trace()
 
         self.status.update(edict(initialized=False, info="", x_axis=None, y_axis=None, controller=None))
+
+        # Check if controller act as a slave or a master one
         if self.settings.child(('controller_status')).value() == "Slave":
             if controller is None: 
                 raise Exception('no controller has been defined externally while this detector is a slave one')
@@ -83,34 +87,30 @@ class DAQ_0DViewer_Keithley2000_V2(DAQ_Viewer_base):
                 self.controller = controller
         else:
             try:
-                self.controller = Keithley2000('K2000')
+
+                # Init Driver with the VISA resource selected
+                selected_VISA = self.settings.child('visa_resources','visa_device').value()
+                selected_baudrate = self.settings.child('visa_resources','visa_baud_rate').value()
+                self.controller = Keithley2000(selected_VISA, selected_baudrate)
+
             except Exception as e:
                 raise Exception('No controller could be defined because an error occurred\
                  while connecting to the instrument. Error: {}'.format(str(e)))
 
+        # Set the controller
+        # Set Resistance measurement mode
+        self.settings.child('K2000Params', 'mode').setValue('R2W')
         self.controller.set_mode(self.settings.child('K2000Params', 'mode').value())
 
-        # initialize viewers with the future type of data
-        self.data_grabed_signal.emit(
-                    [DataFromPlugins(name='Keithley2000', data=[0], dim='Data0D', labels=['Meas', 'Time'])])
-            #self.controller = self.VISA_rm.open_resource(self.settings.child('VISA_ressources').value(),
-            #                                             baud_rate=19200,
-            #                                             read_termination='\n',write_termination='\n')
-
-        #self.controller.set_mode(self.settings.child('K2000Params', 'mode').value())
-
-        #Set the timeout (of the controller or VISA ressource??
-        #self.controller.timeout = self.settings.child(('timeout')).value()
-        #self.controller.timeout = 100
-
-        #self.controller.write("*rst; *cls;")
+        # Reset the controller
         self.controller.reset()
 
+        # Get the controller identification and display it in the viewer
         txt = self.controller.get_identification()
-        #self.settings.child(('id')).setValue(txt)
+        self.settings.child('K2000Params','id').setValue(txt)
 
         # initialize viewers with the future type of data
-        self.data_grabed_signal.emit([DataFromPlugins(name='Keithley2000', data=[np.array([0])], dim='Data0D')])
+        self.data_grabed_signal.emit([DataFromPlugins(name='Keithley2000_V2', data=[np.array([0])], dim='Data0D')])
 
         self.status.initialized = True
         self.status.controller = self.controller
@@ -137,14 +137,12 @@ class DAQ_0DViewer_Keithley2000_V2(DAQ_Viewer_base):
 
         """
 
-        #Normally get data from controller but to test just set a numpy array
-        #data = float(self.controller.query('READ?'))
+        # Get data from controller
         data = self.controller.read()
+        # Convert in a numpy array
         data_value = np.array([data])
-        #data_value = self.controller.query_ascii_values('READ?')
-        #data_value = np.array([1, 2, 3, 4, 5, 6])
         self.data_grabed_signal.emit([DataFromPlugins(name='Keithley2000', data=[data_value], dim='Data0D',)])
-        #self.ind_data += 1
+
 
     def stop(self):
         """
@@ -152,5 +150,6 @@ class DAQ_0DViewer_Keithley2000_V2(DAQ_Viewer_base):
         """
 
         return ""
+
 if __name__ == '__main__':
     main(__file__, init=False)

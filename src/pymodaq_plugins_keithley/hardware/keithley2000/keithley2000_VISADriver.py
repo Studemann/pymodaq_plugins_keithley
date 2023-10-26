@@ -1,60 +1,68 @@
-#import pyvisa as visa
 import pyvisa
-
 
 class Keithley2000VISADriver:
     """
         VISA class driver for the Keithley 2000
         This class relies on pyvisa module to communicate with the instrument via VISA protocol
-        Please refer to the instrument reference manual available at:
-        https://download.tek.com/manual/2000-900_J-Aug2010_User.pdf
+        Either GPIB or serial can be used
     """
-    #def __init__(self, rsrc_name, pyvisa_backend='@ni'):
-    def __init__(self, rsrc_name, pyvisa_backend='@py'):
+
+    def __init__(self, rsrc_name, baudrate, pyvisa_backend='@py'):
         """
         Parameters
         ----------
         rsrc_name   (string)        VISA Resource name
+        baudrate    (int)           Baud Rate for serial communication
         pyvisa_backend  (string)    Expects a pyvisa backend identifier or a path to the visa backend dll (ref. to pyvisa)
         """
 
-        #----------------
-        ##checking VISA ressources
-        try:
-            from pyvisa import ResourceManager
-            VISA_rm = ResourceManager()
-            devices = list(VISA_rm.list_resources())
-            device = ''
-            for dev in devices:
-                if 'GPIB' in dev:
-                    device = dev
-                    break
-        except Exception as e:
-            devices = []
-            device = ''
-            raise e
-        #-----------------
-       # rm = visa.highlevel.ResourceManager(pyvisa_backend)
-       # rm = pyvisa.ResourceManager(pyvisa_backend)
-        #self._instr = rm.open_resource('ASRL3::INSTR')
-        self._instr = VISA_rm.open_resource(str(dev))
-        #self._instr = rm.open_resource(rsrc_name)
-        self._instr.timeout = 10000
-        self._instr.baud_rate = 19200
+        from pyvisa import ResourceManager
+        VISA_rm = ResourceManager()
+
+        # Regarding the VISA resource type given through rsrc_name, open it as GPIB or serial communication
+        if "GPIB" in str(rsrc_name):
+            self._instr = VISA_rm.open_resource(rsrc_name)
+        else:
+            self._instr = VISA_rm.open_resource(rsrc_name,
+                                       baud_rate=baudrate)
+                                       #read_termination='\n',
+                                       #write_termination='\n')
+
+
+
+        # Set communication parameters
+        self._instr.baud_rate = baudrate
+        self._instr.timeout = 1000
+
+        # Set read and write termination character
         self._instr.read_termination = '\n'
         self._instr.write_termination = '\n'
 
     def close(self):
+        """
+        Close the VISA resource
+        """
         self._instr.close()
 
-    def get_identification(self):
-        self._instr.query("*IDN?")
+    def get_identification(self) -> str:
+        """
+        Request the identification string of the instrument
+        return: string
+        """
+        return str(self._instr.query("*IDN?"))
 
     def reset(self):
+        """
+        Send command to initiate the instrument
+        """
         self._instr.write("*CLS")
         self._instr.write("*RST")
 
-    def read(self):
+    def read(self) -> float:
+        """
+        Send a request to get a measurement value
+        return: float
+        """
         return float(self._instr.query("READ?"))
 
     def set_mode(self, mode, **kwargs):
@@ -99,8 +107,30 @@ class Keithley2000VISADriver:
 
 
 if __name__ == "__main__":
+    """
+    Part to test the driver in a "standalone mode"
+    """
+
+    ##checking VISA ressources available
+    # ----------------------------------
     try:
-        k2000 = Keithley2000VISADriver("K2000")
+        from pyvisa import ResourceManager
+
+        VISA_rm = ResourceManager()
+        devices = list(VISA_rm.list_resources())
+        device = ''
+        for dev in devices:
+            if 'GPIB' in dev:
+                device = dev
+                break
+    except Exception as e:
+        devices = []
+        device = ''
+        raise e
+    # -----------------
+
+    try:
+        k2000 = Keithley2000VISADriver(str(dev), 19200)
         k2000.reset()
         k2000.get_identification()
         k2000.set_mode('Ohm2')
