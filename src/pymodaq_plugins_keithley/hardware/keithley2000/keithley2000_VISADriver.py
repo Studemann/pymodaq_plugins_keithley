@@ -1,3 +1,5 @@
+import time
+
 import pyvisa
 
 class Keithley2000VISADriver:
@@ -32,7 +34,7 @@ class Keithley2000VISADriver:
 
         # Set communication parameters
         self._instr.baud_rate = baudrate
-        self._instr.timeout = 1000
+        self._instr.timeout = 3000
 
         # Set read and write termination character
         self._instr.read_termination = '\n'
@@ -130,7 +132,7 @@ if __name__ == "__main__":
     # -----------------
 
     try:
-        k2000 = Keithley2000VISADriver(str(dev), 19200)
+        k2000 = Keithley2000VISADriver(str(dev), 9600)
         k2000.reset()
         k2000.get_identification()
         k2000.set_mode('Ohm2')
@@ -140,6 +142,10 @@ if __name__ == "__main__":
         k2000.set_mode('IAC', range=0.001, resolution='MIN')
         k2000.set_mode('vdc', range=0.1, resolution='0.0001')
 
+        #time.sleep(1)
+
+        print(k2000.read())
+        print(k2000.read())
         print(k2000.read())
 
         k2000.close()
