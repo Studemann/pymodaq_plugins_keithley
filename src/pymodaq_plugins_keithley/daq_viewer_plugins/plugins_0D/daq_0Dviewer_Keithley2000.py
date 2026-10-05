@@ -1,7 +1,7 @@
 from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base, main, comon_parameters
 from pymodaq.utils.data import DataFromPlugins
 from easydict import EasyDict as edict
-from ...hardware.keithley2000.keithley2000_VISADriver import Keithley2000VISADriver as Keithley2000
+from pymodaq_plugins_keithley.hardware.keithley2000.keithley2000_VISADriver import Keithley2000VISADriver as Keithley2000
 
 import numpy as np
 
@@ -40,7 +40,8 @@ class DAQ_0DViewer_Keithley2000(DAQ_Viewer_base):
 
         {'title': 'Keithley2000 Parameters',  'name': 'K2000Params', 'type': 'group', 'children': [
             {'title': 'Identication:', 'name': 'id', 'type': 'text', 'value': "Identification instrument string"},
-            {'title': 'Mode', 'name': 'mode', 'type': 'list', 'limits': ['VDC', 'VAC', 'R2W', 'R4W'], 'value': 'VDC'}
+            {'title': 'Mode', 'name': 'mode', 'type': 'list', 'limits': ['VDC', 'VAC', 'R2W', 'R4W'], 'value': 'VDC'},
+            {'title': 'Computation', 'name': 'computation', 'type': 'list', 'limits': ['None', 'PT1000'], 'value': 'None'}
 
         ]}
     ]
@@ -51,6 +52,7 @@ class DAQ_0DViewer_Keithley2000(DAQ_Viewer_base):
         from pyvisa import ResourceManager
         self.VISA_rm = ResourceManager()
         self.controller=None
+        self.do_computation = 'None'
         #self.x_axis = None
         #self.ind_data = 0
 
@@ -65,6 +67,9 @@ class DAQ_0DViewer_Keithley2000(DAQ_Viewer_base):
         if param.name() == 'mode':
             """Updates the newly selected measurement mode"""
             self.controller.set_mode(param.value())
+        if param.name() == 'computation':
+            # set the do_computation
+            self.do_computation = param.value()
 
     def ini_detector(self, controller=None):
         """
@@ -139,6 +144,11 @@ class DAQ_0DViewer_Keithley2000(DAQ_Viewer_base):
 
         # Get data from controller
         data = self.controller.read()
+
+        # Do compuation if requested
+        if self.do_computation == 'PT1000':
+            raw_data = data
+            data = (-3.9083e-3 + ((3.9083e-3 * 3.9083e-3) - (4 * (-5.775e-7) * (1 - raw_data / 1000))) ** 0.5) / (2 * -5.775e-7)
         # Convert in a numpy array
         data_value = np.array([data])
         self.data_grabed_signal.emit([DataFromPlugins(name='Keithley2000', data=[data_value], dim='Data0D',)])
